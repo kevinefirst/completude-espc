@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Complétude des sites</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--tx:#1d2330;--mu:#667085;--bd:#d9dde5;--ac:#1f6feb;--ok:#e3f6e8;--ko:#fdeaea;--wa:#fff4d6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1e222a;--tx:#e8eaf0;--mu:#98a2b3;--bd:#323846;--ac:#5b9cff;--ok:#16301f;--ko:#3a1c1c;--wa:#3a3216;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1e222a;--tx:#e8eaf0;--mu:#98a2b3;--bd:#323846;--ac:#5b9cff;--ok:#16301f;--ko:#3a1c1c;--wa:#3a3216;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 4px}p.s{color:var(--mu);margin:0 0 16px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px}
+h2{font-size:16px;margin:0 0 8px}
+textarea{width:100%;height:90px;box-sizing:border-box;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:6px;font:12px monospace}
+input[type=file]{width:100%;margin-bottom:8px;color:var(--tx)}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 14px;font:inherit;cursor:pointer;margin:2px 4px 2px 0}
+button.s2{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+.m{color:var(--mu);font-size:13px}.st{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+.st div{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 14px}.st b{font-size:20px;display:block}
+.w{overflow-x:auto;border:1px solid var(--bd);border-radius:10px;background:var(--card);max-height:520px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--card)}tr.o td:nth-child(3){background:var(--ok)}tr.z td:nth-child(3){background:var(--ko)}tr.r td{background:var(--wa)}
+.hid{display:none}
+</style></head><body><main>
+<h1>Complétude des sites</h1>
+<p class="s">Chargez la liste totale et la liste des sites ayant transmis (colonnes : district, site). Excel, CSV ou texte collé.</p>
+<div class="g">
+<div class="c"><h2>1. Liste totale</h2><input type="file" id="f1" accept=".xlsx,.xls,.csv,.txt,.tsv"><textarea id="t1" placeholder="…ou collez ici : district [tab] site"></textarea><div class="m" id="n1">Aucune donnée</div></div>
+<div class="c"><h2>2. Sites ayant transmis</h2><input type="file" id="f2" accept=".xlsx,.xls,.csv,.txt,.tsv"><textarea id="t2" placeholder="…ou collez ici : district [tab] site"></textarea><div class="m" id="n2">Aucune donnée</div></div>
+</div>
+<p><button id="go">Calculer la complétude</button></p>
+<div id="out" class="hid">
+<div class="st" id="st"></div>
+<p><button id="cp">Copier la colonne completude</button><button class="s2" id="cp2">Copier le tableau complet</button> <span class="m" id="msg"></span></p>
+<div class="w"><table><thead><tr><th>district</th><th>site</th><th>completude</th><th>site transmis correspondant</th><th>type</th></tr></thead><tbody id="tb"></tbody></table></div>
+<h2 style="margin-top:18px">Réaffectations et sites non attribués</h2>
+<p class="m">Sites transmis introuvables dans la liste totale : leur statut est attribué à un site du même district n'ayant pas completude = 1.</p>
+<div class="w"><table><thead><tr><th>district</th><th>site transmis introuvable</th><th>attribué à (liste totale)</th></tr></thead><tbody id="rb"></tbody></table></div>
+<textarea id="ta" class="hid" readonly></textarea>
+</div>
+<script>
+var D={1:[],2:[]};
+function parseText(t){return t.split(/\r?\n/).map(function(l){var p=l.split(/\t|;|\|/);return p.length>1?[p[0].trim(),p.slice(1).join(' ').trim()]:null}).filter(function(x){return x&&(x[0]||x[1])})}
+function clean(rows){rows=rows.filter(function(r){return r&&r.length>1&&String(r[1]||'').trim()}).map(function(r){return [String(r[0]||'').trim(),String(r[1]).trim()]});
+if(rows.length&&/^(district|region)/i.test(rows[0][0])&&/site|etab|formation/i.test(rows[0][1]))rows.shift();return rows}
+function load(k,file){var r=new FileReader();r.onload=function(e){try{var wb=XLSX.read(e.target.result,{type:'array'});var ws=wb.Sheets[wb.SheetNames[0]];D[k]=clean(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}));document.getElementById('t'+k).value='';info(k)}catch(x){document.getElementById('n'+k).textContent='Fichier illisible'}};r.readAsArrayBuffer(file)}
+function info(k){document.getElementById('n'+k).textContent=D[k].length+' sites chargés'}
+[1,2].forEach(function(k){document.getElementById('f'+k).onchange=function(e){if(e.target.files[0])load(k,e.target.files[0])};
+document.getElementById('t'+k).oninput=function(e){D[k]=clean(parseText(e.target.value));info(k)}});
+function sa(s){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()}
+var STOP=new Set('CSR CSU CSUS CSM CM CMS DR FSU DM D M I PUBLIC PUBC PRIVE DE DU DES LA LE CDV DIST S P SP ESPC AAISA MAI26 MTE CENTRE VILLAGE'.split(' '));
+function nd(d){d=sa(d).replace(/[^A-Z]/g,'');return d==='TREICHVILLE'?'TREICHVILLEMARCORY':d}
+function core(s){s=sa(s).replace(/\(.*?\)/g,'').replace(/D'/g,' ').replace(/['_\-]/g,' ');return (s.match(/[A-Z0-9]+/g)||[]).filter(function(t){return !STOP.has(t)}).sort().join('')}
+function lev(a,b){var m=a.length,n=b.length,p=[],i,j;for(j=0;j<=n;j++)p[j]=j;for(i=1;i<=m;i++){var c=[i];for(j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+function sc(a,b){if(!a||!b)return 0;if(a===b)return 1;var l=Math.max(a.length,b.length),s=1-lev(a,b)/l;var sh=a.length<b.length?a:b,lo=a.length<b.length?b:a;if(sh.length>=5&&lo.indexOf(sh)>=0)s=Math.max(s,0.9);return s}
+function run(){var T=D[1].map(function(r){return [nd(r[0]),core(r[1])]}),R=D[2].map(function(r){return [nd(r[0]),core(r[1])]});
+var ut={},ur={},res={};
+[[1,'Apparié'],[0.8,'Apparié (nom proche)'],[0.65,'Apparié (nom proche)']].forEach(function(st){var c=[];
+T.forEach(function(t,i){if(i in ut)return;R.forEach(function(r,j){if(j in ur||t[0]!==r[0])return;var s=sc(t[1],r[1]);if(s>=st[0])c.push([s,i,j])})});
+c.sort(function(a,b){return b[0]-a[0]||a[1]-b[1]||a[2]-b[2]});
+c.forEach(function(x){if(x[1] in ut||x[2] in ur)return;ut[x[1]]=1;ur[x[2]]=1;res[x[1]]=[x[2],st[1]]})});
+var re=[];R.forEach(function(r,j){if(j in ur)return;var best=-1,bs=-1;T.forEach(function(t,i){if(i in res||t[0]!==r[0])return;var s=sc(t[1],r[1]);if(s>bs){bs=s;best=i}});
+if(best>=0){res[best]=[j,'Réaffecté'];re.push([D[2][j][0],D[2][j][1],D[1][best][1],true])}else re.push([D[2][j][0],D[2][j][1],'AUCUN site disponible dans ce district',false])});
+return {res:res,re:re}}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+var OUT=null;
+document.getElementById('go').onclick=function(){if(!D[1].length||!D[2].length){alert('Chargez les deux listes.');return}
+var o=run(),res=o.res,h='',n1=0,col=[],full=[];
+D[1].forEach(function(r,i){var v=i in res?1:0;n1+=v;col.push(v);var m=v?D[2][res[i][0]][1]:'',t=v?res[i][1]:'';full.push([r[0],r[1],v,m,t].join('\t'));
+h+='<tr class="'+(t==='Réaffecté'?'r':v?'o':'z')+'"><td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td><td>'+v+'</td><td>'+esc(m)+'</td><td>'+t+'</td></tr>'});
+document.getElementById('tb').innerHTML=h;
+document.getElementById('rb').innerHTML=o.re.map(function(x){return '<tr><td>'+esc(x[0])+'</td><td>'+esc(x[1])+'</td><td>'+esc(x[2])+'</td></tr>'}).join('')||'<tr><td colspan="3">Aucune</td></tr>';
+var na=o.re.filter(function(x){return !x[3]}).length;
+document.getElementById('st').innerHTML='<div><b>'+D[1].length+'</b>sites (liste totale)</div><div><b>'+D[2].length+'</b>sites transmis</div><div><b>'+n1+'</b>completude = 1</div><div><b>'+(D[1].length-n1)+'</b>completude = 0</div><div><b>'+(o.re.length-na)+'</b>réaffectés</div><div><b>'+na+'</b>non attribués</div>';
+OUT={col:col.join('\n'),full:'district\tsite\tcompletude\tsite transmis\ttype\n'+full.join('\n')};
+document.getElementById('out').classList.remove('hid')};
+function cop(t){var ta=document.getElementById('ta'),m=document.getElementById('msg');
+function fb(){ta.classList.remove('hid');ta.value=t;ta.select();try{document.execCommand('copy');m.textContent='Copié.'}catch(e){m.textContent='Sélectionnez le texte ci-dessous et copiez-le (Ctrl+C).'}}
+if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){m.textContent='Copié.'},fb);else fb()}
+document.getElementById('cp').onclick=function(){cop(OUT.col)};
+document.getElementById('cp2').onclick=function(){cop(OUT.full)};
+</script></main></body></html>
